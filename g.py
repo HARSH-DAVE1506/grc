@@ -33,10 +33,10 @@ RANDOM_COMMANDS = [
 ]
 
 COMMANDS = {
-    "Open_Palm": {"T": 132, "IO4": 255, "IO5": 255},  # Turn on LED
+    "Open_Palm": {"T": 132, "IO4": 10, "IO5": 255},  # Turn on LED
     "Closed_Fist": {"T": 132, "IO4": 0, "IO5": 0},    # Turn off LED
     "ILoveYou": {"T": 133, "X": -90, "Y": -30, "SPD": 0, "ACC": 0},  # Shy (turn left, look down)
-    "Thumb_Up": {"T": 133, "X": 0, "Y": 180, "SPD": 0, "ACC": 0},  # all up
+    "Thumb_Up": {"T": 133, "X": , "Y": 180, "SPD": 0, "ACC": 0},  # all up
     "Thumb_Down": {"T": 133, "X": 0, "Y": -30, "SPD": 0, "ACC": 0}, # all down
     "Victory": {"T": 133, "X": 180, "Y": 0, "SPD": 0, "ACC": 0} # round 180
 }
@@ -58,6 +58,9 @@ except serial.SerialException as e:
 
 # Event flag to pause random commands after gesture detection
 gesture_detected_event = threading.Event()
+
+# Variable to track the last gesture detection time
+last_gesture_time = 0
 
 def send_serial_command(command):
     if ser is None:
@@ -97,30 +100,36 @@ while cap.isOpened():
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
 
-    # Recognize gestures
-    recognition_result = recognizer.recognize(image)
+    # Check if 5 seconds have passed since the last gesture detection
+    current_time = time.time()
+    if current_time - last_gesture_time >= 5:
+        # Recognize gestures
+        recognition_result = recognizer.recognize(image)
 
-    # Process the result
-    if recognition_result.gestures:
-        top_gesture = recognition_result.gestures[0][0]
-        gesture_name = top_gesture.category_name
-        print(f"Detected gesture: {gesture_name}")
+        # Process the result
+        if recognition_result.gestures:
+            top_gesture = recognition_result.gestures[0][0]
+            gesture_name = top_gesture.category_name
+            print(f"Detected gesture: {gesture_name}")
 
-        if gesture_name in COMMANDS:
-            gesture_command = COMMANDS[gesture_name]
-            try:
-                send_serial_command(gesture_command)
-                print(f"Gesture command sent: {gesture_command}")
-                
-                if gesture_name in ["ILoveYou", "Thumb_Up", "Thumb_Down", "Victory"]:
-                    threading.Timer(2.0, send_zero_command).start()
+            if gesture_name in COMMANDS:
+                gesture_command = COMMANDS[gesture_name]
+                try:
+                    send_serial_command(gesture_command)
+                    print(f"Gesture command sent: {gesture_command}")
+                    
+                    if gesture_name in ["ILoveYou", "Thumb_Up", "Thumb_Down", "Victory"]:
+                        threading.Timer(2.0, send_zero_command).start()
 
-                # Pause random commands for 10 seconds after gesture detection
-                gesture_detected_event.set()
-                threading.Timer(10.0, gesture_detected_event.clear).start()
+                    # Pause random commands for 10 seconds after gesture detection
+                    gesture_detected_event.set()
+                    threading.Timer(10.0, gesture_detected_event.clear).start()
 
-            except Exception as e:
-                print(f'Failed to send gesture command: {e}')
+                    # Update the last gesture detection time
+                    last_gesture_time = current_time
+
+                except Exception as e:
+                    print(f'Failed to send gesture command: {e}')
 
     # Display the frame (optional, remove if not needed)
     #cv2.imshow('Gesture Recognition', frame)
